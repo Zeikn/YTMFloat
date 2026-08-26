@@ -206,6 +206,15 @@
     }, 200);
   }
 
+  let desiredVolumePct = null;
+
+  function reapplyDesiredVolume() {
+    if (desiredVolumePct == null) return;
+    const api = getPlayerApi();
+    if (api) api.setVolume(desiredVolumePct);
+    else if (video) video.volume = desiredVolumePct / 100;
+  }
+
   function attachVideoListeners() {
     const current = findVideo();
     if (!current || current === video) return;
@@ -215,7 +224,10 @@
     video.addEventListener("play", pushState);
     video.addEventListener("pause", pushState);
     video.addEventListener("volumechange", pushState);
-    video.addEventListener("loadedmetadata", pushState);
+    video.addEventListener("loadedmetadata", () => {
+      reapplyDesiredVolume();
+      pushState();
+    });
   }
 
   function handleCommand(command, payload) {
@@ -249,6 +261,7 @@
       case "volume":
         if (typeof payload?.value === "number") {
           const pct = Math.min(100, Math.max(0, Math.round(payload.value * 100)));
+          desiredVolumePct = pct;
           if (api) api.setVolume(pct);
           else if (video) video.volume = payload.value;
         }
