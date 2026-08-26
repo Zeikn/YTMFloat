@@ -14,12 +14,23 @@
   let video = null;
   let sendTimer = null;
   let port = null;
+  let reconnectTimer = null;
+
+  function scheduleReconnectPort() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connectPort();
+      pushState();
+    }, 2000);
+  }
 
   function connectPort() {
     try {
       port = chrome.runtime.connect({ name: "ytm-bridge" });
     } catch (err) {
       console.warn("[YTM Float] connectPort failed:", err);
+      scheduleReconnectPort();
       return;
     }
 
@@ -31,6 +42,7 @@
 
     port.onDisconnect.addListener(() => {
       port = null;
+      scheduleReconnectPort();
     });
   }
 
@@ -173,12 +185,16 @@
   }
 
   function pushState() {
-    if (!port) return;
+    if (!port) {
+      scheduleReconnectPort();
+      return;
+    }
     try {
       port.postMessage({ type: "ytm-state", state: buildState() });
     } catch (err) {
       console.warn("[YTM Float] pushState failed:", err);
       port = null;
+      scheduleReconnectPort();
     }
   }
 
