@@ -2,6 +2,8 @@
 
 A compact, frameless, always-on-top floating player for YouTube Music. Drag it anywhere on your screen, control playback without switching tabs or windows, and control it straight from Opera GX's built-in sidebar YTM panel instead of needing a dedicated browser tab.
 
+![YTM Float widget](YTMFloat.png)
+
 ## Features
 
 - Frameless, rounded, always-on-top widget — stays visible over any application, not just your browser
