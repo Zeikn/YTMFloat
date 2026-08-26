@@ -3,7 +3,7 @@
   "name": "YTM Float",
   "version": "1.0.0",
   "description": "A compact, draggable floating player for YouTube Music.",
-  "permissions": ["tabs", "storage", "scripting", "alarms"],
+  "permissions": ["alarms"],
   "host_permissions": ["https://music.youtube.com/*"],
   "background": {
     "service_worker": "background.js"
