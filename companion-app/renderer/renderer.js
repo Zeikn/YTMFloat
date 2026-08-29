@@ -84,8 +84,8 @@ function render(state) {
     titleEl.textContent = "Not playing";
     artistEl.textContent = "Open YouTube Music in Opera";
     thumbnail.removeAttribute("src");
-    playIcon.hidden = false;
-    pauseIcon.hidden = true;
+    playIcon.classList.add("active");
+    pauseIcon.classList.remove("active");
     return;
   }
 
@@ -94,8 +94,8 @@ function render(state) {
   artistEl.textContent = state.artist || "";
   if (state.thumbnailUrl) thumbnail.src = state.thumbnailUrl;
 
-  playIcon.hidden = state.isPlaying;
-  pauseIcon.hidden = !state.isPlaying;
+  playIcon.classList.toggle("active", !state.isPlaying);
+  pauseIcon.classList.toggle("active", state.isPlaying);
 
   if (!isSeeking) {
     const pct = state.duration > 0 ? (state.currentTime / state.duration) * 1000 : 0;
