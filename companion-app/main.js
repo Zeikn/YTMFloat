@@ -5,33 +5,74 @@ const { WebSocketServer } = require("ws");
 
 const WS_PORT = 38214;
 const POSITION_FILE = path.join(app.getPath("userData"), "window-position.json");
+const FX_POSITION_FILE = path.join(app.getPath("userData"), "fx-window-position.json");
+const FX_STATE_FILE = path.join(app.getPath("userData"), "fx-state.json");
 const WINDOW_WIDTH = 336;
 const WINDOW_HEIGHT = 186;
 const QUEUE_EXPAND_HEIGHT = 180;
 const COMPACT_WIDTH = 180;
 const COMPACT_HEIGHT = 150;
+const FX_WINDOW_WIDTH = 260;
+const FX_WINDOW_HEIGHT = 360;
+
+const DEFAULT_FX_STATE = { eq: [0, 0, 0, 0, 0, 0, 0], reverbWet: 0, width: 1 };
+const EQ_PRESETS = {
+  flat: [0, 0, 0, 0, 0, 0, 0],
+  bassBoost: [6, 5, 3, 0, 0, 0, 0],
+  trebleBoost: [0, 0, 0, 0, 2, 4, 6],
+  vocal: [-2, -1, 2, 4, 3, 1, 0],
+  lofi: [3, 2, 0, -2, -4, -6, -8],
+};
 
 let mainWindow = null;
+let fxWindow = null;
 let tray = null;
 let extensionSocket = null;
 let isQuitting = false;
 
-function loadSavedPosition() {
+function loadFXState() {
   try {
-    return JSON.parse(fs.readFileSync(POSITION_FILE, "utf-8"));
+    return { ...DEFAULT_FX_STATE, ...JSON.parse(fs.readFileSync(FX_STATE_FILE, "utf-8")) };
+  } catch {
+    return { ...DEFAULT_FX_STATE };
+  }
+}
+
+let fxState = loadFXState();
+let fxSaveTimer = null;
+
+function saveFXState() {
+  if (fxSaveTimer) return;
+  fxSaveTimer = setTimeout(() => {
+    fxSaveTimer = null;
+    try {
+      fs.writeFileSync(FX_STATE_FILE, JSON.stringify(fxState));
+    } catch {}
+  }, 300);
+}
+
+function sendFXSync() {
+  if (extensionSocket && extensionSocket.readyState === extensionSocket.OPEN) {
+    extensionSocket.send(JSON.stringify({ type: "command", command: "fx-sync", payload: fxState }));
+  }
+}
+
+function loadSavedPosition(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf-8"));
   } catch {
     return null;
   }
 }
 
-function savePosition(bounds) {
+function savePosition(file, bounds) {
   try {
-    fs.writeFileSync(POSITION_FILE, JSON.stringify({ x: bounds.x, y: bounds.y }));
+    fs.writeFileSync(file, JSON.stringify({ x: bounds.x, y: bounds.y }));
   } catch {}
 }
 
 function createWindow() {
-  const saved = loadSavedPosition();
+  const saved = loadSavedPosition(POSITION_FILE);
   const primary = screen.getPrimaryDisplay().workArea;
   const x = saved?.x ?? primary.x + primary.width - WINDOW_WIDTH - 24;
   const y = saved?.y ?? primary.y + primary.height - WINDOW_HEIGHT - 24;
@@ -65,7 +106,7 @@ function createWindow() {
   let moveTimer = null;
   mainWindow.on("moved", () => {
     clearTimeout(moveTimer);
-    moveTimer = setTimeout(() => savePosition(mainWindow.getBounds()), 300);
+    moveTimer = setTimeout(() => savePosition(POSITION_FILE, mainWindow.getBounds()), 300);
   });
 
   mainWindow.on("close", (event) => {
@@ -74,6 +115,68 @@ function createWindow() {
       mainWindow.hide();
     }
   });
+}
+
+function createFXWindow() {
+  const saved = loadSavedPosition(FX_POSITION_FILE);
+  const mainBounds = mainWindow?.getBounds();
+  const x = saved?.x ?? (mainBounds ? mainBounds.x - FX_WINDOW_WIDTH - 12 : 100);
+  const y = saved?.y ?? (mainBounds ? mainBounds.y : 100);
+
+  fxWindow = new BrowserWindow({
+    width: FX_WINDOW_WIDTH,
+    height: FX_WINDOW_HEIGHT,
+    x,
+    y,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    thickFrame: false,
+    roundedCorners: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  fxWindow.setAlwaysOnTop(true, "screen-saver");
+  fxWindow.loadFile(path.join(__dirname, "renderer", "fx.html"));
+
+  fxWindow.webContents.once("did-finish-load", () => {
+    fxWindow?.webContents.send("fx-state", fxState);
+  });
+
+  let moveTimer = null;
+  fxWindow.on("moved", () => {
+    clearTimeout(moveTimer);
+    moveTimer = setTimeout(() => savePosition(FX_POSITION_FILE, fxWindow.getBounds()), 300);
+  });
+
+  fxWindow.on("close", (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      fxWindow.hide();
+    }
+  });
+}
+
+function toggleFXWindow() {
+  if (!fxWindow) {
+    createFXWindow();
+    fxWindow.once("ready-to-show", () => fxWindow.show());
+    return;
+  }
+  if (fxWindow.isVisible()) {
+    fxWindow.hide();
+  } else {
+    fxWindow.webContents.send("fx-state", fxState);
+    fxWindow.show();
+  }
 }
 
 function toggleVisibility() {
@@ -116,6 +219,7 @@ function startWebSocketServer() {
   wss.on("connection", (ws) => {
     console.log("[YTM Float] extension connected");
     extensionSocket = ws;
+    sendFXSync();
 
     ws.on("message", (data) => {
       let message;
@@ -140,15 +244,28 @@ function startWebSocketServer() {
   });
 }
 
+const FX_COMMANDS = new Set(["eq-band", "eq-preset", "reverb-wet", "stereo-width", "fx-reset"]);
+
 ipcMain.on("ytm-command", (_event, { command, payload }) => {
+  if (FX_COMMANDS.has(command)) {
+    if (command === "eq-band") fxState.eq[payload.index] = payload.gainDb;
+    else if (command === "eq-preset" && EQ_PRESETS[payload.name]) fxState.eq = [...EQ_PRESETS[payload.name]];
+    else if (command === "reverb-wet") fxState.reverbWet = payload.value;
+    else if (command === "stereo-width") fxState.width = payload.value;
+    else if (command === "fx-reset") fxState = { ...DEFAULT_FX_STATE };
+    saveFXState();
+  }
+
   if (extensionSocket && extensionSocket.readyState === extensionSocket.OPEN) {
     extensionSocket.send(JSON.stringify({ type: "command", command, payload }));
   }
 });
 
-ipcMain.on("hide-window", () => {
-  mainWindow?.hide();
+ipcMain.on("hide-window", (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.hide();
 });
+
+ipcMain.on("toggle-fx-window", toggleFXWindow);
 
 let queueExpandYDelta = 0;
 let resizeAnimationTimer = null;

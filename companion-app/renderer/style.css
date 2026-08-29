@@ -313,6 +313,7 @@ input[type="range"]::-webkit-slider-thumb {
 .compact .volume-icon,
 .compact #volume,
 .compact #queue-toggle,
+.compact #fx-toggle,
 .compact .queue-panel {
   display: none;
 }

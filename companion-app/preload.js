@@ -16,4 +16,10 @@ contextBridge.exposeInMainWorld("ytm", {
   setCompact(isCompact) {
     ipcRenderer.send("set-compact", isCompact);
   },
+  openFX() {
+    ipcRenderer.send("toggle-fx-window");
+  },
+  onFXState(callback) {
+    ipcRenderer.on("fx-state", (_event, state) => callback(state));
+  },
 });

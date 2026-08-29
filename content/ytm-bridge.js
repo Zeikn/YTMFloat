@@ -230,7 +230,21 @@
     });
   }
 
+  const FX_COMMAND_TYPES = {
+    "eq-band": "eq-band",
+    "eq-preset": "eq-preset",
+    "reverb-wet": "reverb-wet",
+    "stereo-width": "stereo-width",
+    "fx-reset": "fx-reset",
+    "fx-sync": "sync",
+  };
+
   function handleCommand(command, payload) {
+    if (FX_COMMAND_TYPES[command]) {
+      window.postMessage({ source: "ytmfloat-fx-command", payload: { type: FX_COMMAND_TYPES[command], ...payload } }, "*");
+      return;
+    }
+
     attachVideoListeners();
     const api = getPlayerApi();
 

@@ -15,6 +15,7 @@ const closeBtn = document.getElementById("close-btn");
 const shuffleBtn = document.getElementById("shuffle");
 const repeatBtn = document.getElementById("repeat");
 const compactToggle = document.getElementById("compact-toggle");
+const fxToggle = document.getElementById("fx-toggle");
 
 let isSeeking = false;
 let isAdjustingVolume = false;
@@ -171,6 +172,10 @@ compactToggle.addEventListener("click", () => {
   card.classList.toggle("compact", isCompact);
   compactToggle.title = isCompact ? "Expand" : "Compact mode";
   window.ytm.setCompact(isCompact);
+});
+
+fxToggle.addEventListener("click", () => {
+  window.ytm.openFX();
 });
 
 render(null);
