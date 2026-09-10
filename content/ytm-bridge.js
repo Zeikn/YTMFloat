@@ -85,8 +85,14 @@
   }
 
   function currentVolume() {
+    if (desiredVolumePct != null) {
+        return desiredVolumePct / 100;
+    }
+
     const api = getPlayerApi();
+
     if (api) return api.getVolume() / 100;
+
     return video?.volume ?? 1;
   }
 
@@ -223,7 +229,10 @@
     video.addEventListener("timeupdate", scheduleStatePush);
     video.addEventListener("play", pushState);
     video.addEventListener("pause", pushState);
-    video.addEventListener("volumechange", pushState);
+    video.addEventListener("volumechange", () => {
+      reapplyDesiredVolume();
+      pushState();
+    });
     video.addEventListener("loadedmetadata", () => {
       reapplyDesiredVolume();
       pushState();
