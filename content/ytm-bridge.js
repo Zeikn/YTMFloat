@@ -85,15 +85,7 @@
   }
 
   function currentVolume() {
-    if (desiredVolumePct != null) {
-        return desiredVolumePct / 100;
-    }
-
-    const api = getPlayerApi();
-
-    if (api) return api.getVolume() / 100;
-
-    return video?.volume ?? 1;
+    return desiredVolumePct / 100;
   }
 
   function findPlayerBarButton(predicate) {
@@ -212,14 +204,7 @@
     }, 200);
   }
 
-  let desiredVolumePct = null;
-
-  function reapplyDesiredVolume() {
-    if (desiredVolumePct == null) return;
-    const api = getPlayerApi();
-    if (api) api.setVolume(desiredVolumePct);
-    else if (video) video.volume = desiredVolumePct / 100;
-  }
+  let desiredVolumePct = 100;
 
   function attachVideoListeners() {
     const current = findVideo();
@@ -230,11 +215,9 @@
     video.addEventListener("play", pushState);
     video.addEventListener("pause", pushState);
     video.addEventListener("volumechange", () => {
-      reapplyDesiredVolume();
       pushState();
     });
     video.addEventListener("loadedmetadata", () => {
-      reapplyDesiredVolume();
       pushState();
     });
   }
@@ -283,10 +266,23 @@
         break;
       case "volume":
         if (typeof payload?.value === "number") {
-          const pct = Math.min(100, Math.max(0, Math.round(payload.value * 100)));
-          desiredVolumePct = pct;
-          if (api) api.setVolume(pct);
-          else if (video) video.volume = payload.value;
+          const value = Math.min(
+            1,
+            Math.max(0, payload.value)
+          );
+
+          desiredVolumePct = Math.round(value * 100);
+
+          window.postMessage(
+            {
+              source: "ytmfloat-fx-command",
+              payload: {
+                type: "volume",
+                value,
+              },
+            },
+            "*"
+          );
         }
         break;
       case "queue-jump": {

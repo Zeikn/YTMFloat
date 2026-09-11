@@ -52,6 +52,7 @@
     eq: EQ_BANDS.map(() => 0),
     reverbWet: 0,
     width: 1,
+    volume: 1,
   };
 
   function buildImpulseResponse(ctx, durationSec, decay) {
@@ -144,8 +145,11 @@
     graph.eqNodes.forEach((node, i) => {
       node.gain.value = currentParams.eq[i] ?? 0;
     });
+
     graph.reverb.wetParam.value = currentParams.reverbWet;
     graph.widener.widthParam.value = currentParams.width;
+
+    graph.volume.gain.value = currentParams.volume;
   }
 
   function setupGraphForElement(el) {
@@ -157,13 +161,21 @@
       const eqNodes = buildEqChain(ctx);
       const reverb = buildReverb(ctx);
       const widener = buildWidener(ctx);
+      const volume = ctx.createGain();
+      volume.gain.value = currentParams.volume;
 
       source.connect(eqNodes[0]);
       eqNodes[eqNodes.length - 1].connect(reverb.input);
       reverb.output.connect(widener.input);
-      widener.output.connect(ctx.destination);
+      widener.output.connect(volume);
+      volume.connect(ctx.destination);
 
-      const graph = { eqNodes, reverb, widener };
+      const graph = {
+        eqNodes,
+        reverb,
+        widener,
+        volume,
+      };
       applyCurrentParamsTo(graph);
       graphs.push(graph);
 
@@ -221,6 +233,15 @@
         currentParams.eq = EQ_BANDS.map(() => 0);
         currentParams.reverbWet = 0;
         currentParams.width = 1;
+        break;
+
+      case "volume":
+        if (typeof cmd.value === "number") {
+          currentParams.volume = Math.min(
+            1,
+            Math.max(0, cmd.value)
+          );
+        }
         break;
       case "sync":
         if (Array.isArray(cmd.eq)) currentParams.eq = [...cmd.eq];
